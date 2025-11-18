@@ -28,7 +28,6 @@ npm install
 
 ### 2. Google Cloud Vision API Kurulumu
 
-Detaylı kurulum talimatları için [GOOGLE_CLOUD_SETUP.md](./GOOGLE_CLOUD_SETUP.md) dosyasına bakın.
 
 Kısaca:
 1. [Google Cloud Console](https://console.cloud.google.com/) üzerinden yeni bir proje oluşturun
