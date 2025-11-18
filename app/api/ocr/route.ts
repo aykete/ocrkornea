@@ -2,29 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import vision from '@google-cloud/vision';
 import type { ImageAnnotatorClient } from '@google-cloud/vision';
 
-// Google Cloud Vision client'ını oluştur
-let client: ImageAnnotatorClient;
+// Google Cloud Vision client'ını oluştur (lazy initialization)
+let client: ImageAnnotatorClient | null = null;
 
-if (process.env.GOOGLE_CREDENTIALS_BASE64) {
-  // Production (Netlify/Vercel): Base64 encoded JSON
-  try {
-    const credentials = JSON.parse(
-      Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString()
-    );
-    client = new vision.ImageAnnotatorClient({ credentials });
-    console.log('Google Cloud Vision initialized with base64 credentials');
-  } catch (error) {
-    console.error('Failed to parse base64 credentials:', error);
-    throw new Error('Invalid GOOGLE_CREDENTIALS_BASE64 environment variable');
+function getClient(): ImageAnnotatorClient {
+  if (client) return client;
+
+  if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+    // Production (Netlify/Vercel): Base64 encoded JSON
+    try {
+      const credentials = JSON.parse(
+        Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString()
+      );
+      client = new vision.ImageAnnotatorClient({ credentials });
+      console.log('Google Cloud Vision initialized with base64 credentials');
+      return client;
+    } catch (error) {
+      console.error('Failed to parse base64 credentials:', error);
+      throw new Error('Invalid GOOGLE_CREDENTIALS_BASE64 environment variable');
+    }
+  } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    // Local: JSON file path
+    client = new vision.ImageAnnotatorClient({
+      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+    });
+    console.log('Google Cloud Vision initialized with file path');
+    return client;
+  } else {
+    throw new Error('Google Cloud credentials not configured. Set either GOOGLE_CREDENTIALS_BASE64 or GOOGLE_APPLICATION_CREDENTIALS');
   }
-} else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  // Local: JSON file path
-  client = new vision.ImageAnnotatorClient({
-    keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-  });
-  console.log('Google Cloud Vision initialized with file path');
-} else {
-  throw new Error('Google Cloud credentials not configured. Set either GOOGLE_CREDENTIALS_BASE64 or GOOGLE_APPLICATION_CREDENTIALS');
 }
 
 export async function POST(request: NextRequest) {
@@ -45,7 +51,8 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Google Cloud Vision API'ye gönder
-    const [result] = await client.textDetection(buffer);
+    const visionClient = getClient();
+    const [result] = await visionClient.textDetection(buffer);
     const detections = result.textAnnotations;
 
     if (!detections || detections.length === 0) {
