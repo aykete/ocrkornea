@@ -1,36 +1,142 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Kornea Topografi OCR Uygulaması
 
-## Getting Started
+Google Cloud Vision API kullanarak kornea topografi görüntülerinden veri çıkartan ve CSV formatında kaydeden Next.js uygulaması.
 
-First, run the development server:
+## Özellikler
+
+- 📸 Birden fazla görüntü yükleme desteği
+- 🔍 Google Cloud Vision API ile OCR
+- 📊 Özelleştirilebilir veri çıkarma (belirli alanları seçebilme)
+- 📥 CSV formatında veri export
+- ⚡ Modern ve hızlı UI (Next.js 15 + Shadcn/ui)
+- 🎨 Responsive tasarım
+
+## Gereksinimler
+
+- Node.js 18.x veya üzeri
+- npm veya yarn
+- Google Cloud hesabı ve Vision API erişimi
+
+## Kurulum
+
+### 1. Projeyi İndirin ve Bağımlılıkları Kurun
+
+```bash
+cd ocr
+npm install
+```
+
+### 2. Google Cloud Vision API Kurulumu
+
+Detaylı kurulum talimatları için [GOOGLE_CLOUD_SETUP.md](./GOOGLE_CLOUD_SETUP.md) dosyasına bakın.
+
+Kısaca:
+1. [Google Cloud Console](https://console.cloud.google.com/) üzerinden yeni bir proje oluşturun
+2. Vision API'yi aktifleştirin
+3. Service Account oluşturun ve JSON key dosyasını indirin
+4. JSON key dosyasını proje dizinine kopyalayın
+5. `.env.local` dosyasını yapılandırın
+
+### 3. Environment Variables
+
+`.env.local` dosyası oluşturun:
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=./google-credentials.json
+```
+
+`.env.example` dosyasını referans olarak kullanabilirsiniz.
+
+## Kullanım
+
+### Development Server'ı Başlatın
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Tarayıcıda [http://localhost:3000](http://localhost:3000) adresine gidin.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Uygulama Kullanımı
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Fotoğraf Yükle**: Bir veya birden fazla kornea topografi görüntüsü seçin
+2. **Veri Alanları**: Çıkartmak istediğiniz veri alanlarını belirtin (virgülle ayırarak)
+   - Örnek: `K1, K2, Sim-K, Axis`
+   - Boş bırakırsanız tüm metin gösterilir
+3. **OCR İşlemini Başlat**: Görüntüler işlenecek ve sonuçlar tabloda gösterilecek
+4. **CSV İndir**: Sonuçları CSV dosyası olarak indirin
 
-## Learn More
+### Veri Parse Mantığını Özelleştirme
 
-To learn more about Next.js, take a look at the following resources:
+`app/page.tsx` dosyasındaki `parseCorneaData` fonksiyonunu ihtiyacınıza göre düzenleyebilirsiniz:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```typescript
+const parseCorneaData = (text: string, fields: string): Record<string, string> => {
+  // Özel parse mantığınızı buraya ekleyin
+  // ...
+};
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Proje Yapısı
 
-## Deploy on Vercel
+```
+ocr/
+├── app/
+│   ├── api/
+│   │   └── ocr/
+│   │       └── route.ts          # OCR API endpoint
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx                   # Ana sayfa
+├── components/
+│   └── ui/                        # Shadcn/ui componentleri
+├── lib/
+│   └── utils.ts
+├── .env.local                     # Environment variables (git'e eklenmez)
+├── .env.example                   # Örnek env dosyası
+├── GOOGLE_CLOUD_SETUP.md         # Google Cloud kurulum rehberi
+└── package.json
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Teknolojiler
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Framework**: Next.js 15
+- **UI Library**: Shadcn/ui + Tailwind CSS
+- **OCR**: Google Cloud Vision API
+- **Language**: TypeScript
+- **Icons**: Lucide React
+
+## Build ve Production
+
+### Production Build
+
+```bash
+npm run build
+npm start
+```
+
+### Deploy
+
+Bu projeyi Vercel, AWS, veya herhangi bir Node.js hosting platformunda deploy edebilirsiniz.
+
+**Önemli**: Environment variables'ları deployment platformunda da ayarlamanız gerekir.
+
+## Güvenlik
+
+- Google Cloud credentials dosyalarını **ASLA** Git'e commit etmeyin
+- API key'leri public repository'lerde paylaşmayın
+- Production'da environment variables'ları güvenli bir şekilde yönetin
+
+## Fiyatlandırma
+
+Google Cloud Vision API:
+- İlk 1,000 istek/ay **ücretsiz**
+- Detaylar: [Vision API Pricing](https://cloud.google.com/vision/pricing)
+
+## Sorun Giderme
+
+Yaygın sorunlar ve çözümleri için [GOOGLE_CLOUD_SETUP.md](./GOOGLE_CLOUD_SETUP.md) dosyasındaki "Sorun Giderme" bölümüne bakın.
+
+## Lisans
+
+Bu proje kişisel kullanım için geliştirilmiştir.
