@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import vision from '@google-cloud/vision';
+import type { ImageAnnotatorClient } from '@google-cloud/vision';
 
 // Google Cloud Vision client'ını oluştur
-let client: vision.ImageAnnotatorClient;
+let client: ImageAnnotatorClient;
 
 if (process.env.GOOGLE_CREDENTIALS_BASE64) {
   // Production (Netlify/Vercel): Base64 encoded JSON
@@ -56,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Görüntü genişliğini bul (ilk detection'ın bounding box'ından)
     const firstBBox = detections[0]?.boundingPoly?.vertices;
-    const imageWidth = firstBBox ? Math.max(...firstBBox.map(v => v.x || 0)) : 1000;
+    const imageWidth = firstBBox ? Math.max(...firstBBox.map((v: any) => v.x || 0)) : 1000;
 
     // Sol taraftaki metinleri filtrele (sadece tam görüntü için)
     // Kornea topografi görüntülerinde text veriler genellikle sol %33'te
@@ -71,20 +72,20 @@ export async function POST(request: NextRequest) {
     if (imageType === 'full') {
       // Tam görüntü: İki aşamalı filtreleme
       // 1. Ana veriler için sol %33
-      const mainDataBlocks = detections.slice(1).filter((text) => {
+      const mainDataBlocks = detections.slice(1).filter((text: any) => {
         const vertices = text.boundingPoly?.vertices;
         if (!vertices || vertices.length === 0) return false;
 
-        const avgX = vertices.reduce((sum, v) => sum + (v.x || 0), 0) / vertices.length;
+        const avgX = vertices.reduce((sum: number, v: any) => sum + (v.x || 0), 0) / vertices.length;
         return avgX < leftThreshold;
       });
 
       // 2. AC Depth, Pupil Dia gibi alt veriler için sol %50 (ama sadece bunları ara)
-      const extendedDataBlocks = detections.slice(1).filter((text) => {
+      const extendedDataBlocks = detections.slice(1).filter((text: any) => {
         const vertices = text.boundingPoly?.vertices;
         if (!vertices || vertices.length === 0) return false;
 
-        const avgX = vertices.reduce((sum, v) => sum + (v.x || 0), 0) / vertices.length;
+        const avgX = vertices.reduce((sum: number, v: any) => sum + (v.x || 0), 0) / vertices.length;
         const desc = text.description?.toLowerCase() || '';
 
         // Sadece AC Depth, Pupil Dia, Chamber, Enter IOP gibi anahtar kelimeleri içerenleri al
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
 
       // İki listeyi birleştir (duplicate'leri önle)
       const combinedBlocks = [...mainDataBlocks];
-      extendedDataBlocks.forEach(block => {
+      extendedDataBlocks.forEach((block: any) => {
         if (!mainDataBlocks.includes(block)) {
           combinedBlocks.push(block);
         }
@@ -121,14 +122,14 @@ export async function POST(request: NextRequest) {
 
       // Sol taraftaki metinleri birleştir (satır yapısını korumak için \n kullan)
       processedText = filteredTextBlocks
-        .map(block => block.description)
+        .map((block: any) => block.description)
         .join('\n') || processedText;
     }
 
     return NextResponse.json({
       success: true,
       fullText: processedText,
-      textBlocks: filteredTextBlocks.map((text) => ({
+      textBlocks: filteredTextBlocks.map((text: any) => ({
         description: text.description,
         boundingBox: text.boundingPoly?.vertices,
       })),

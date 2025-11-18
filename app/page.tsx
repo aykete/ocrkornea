@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Download, Loader2 } from 'lucide-react';
+import { Upload, Download, Loader2, LogOut } from 'lucide-react';
 
 interface OCRResult {
   fileName: string;
@@ -15,11 +16,22 @@ interface OCRResult {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [results, setResults] = useState<OCRResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [fieldNames, setFieldNames] = useState<string>('');
+  const [fieldNames, setFieldNames] = useState<string>('k, ac, pupil');
   const [imageType, setImageType] = useState<'full' | 'cropped'>('full');
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+      router.refresh();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -309,11 +321,22 @@ export default function Home() {
 
   return (
     <div className="container mx-auto p-4 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Kornea Topografi OCR</h1>
-        <p className="text-muted-foreground">
-          Kornea topografi görüntülerinden veri çıkarın ve CSV olarak kaydedin
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-4xl font-bold mb-2">Kornea Topografi OCR</h1>
+          <p className="text-muted-foreground">
+            Kornea topografi görüntülerinden veri çıkarın ve CSV olarak kaydedin
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          className="flex items-center gap-2"
+        >
+          <LogOut className="h-4 w-4" />
+          Çıkış
+        </Button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 mb-6">
@@ -400,7 +423,7 @@ export default function Home() {
                     size="sm"
                     onClick={() => setFieldNames('')}
                   >
-                    Tümü (Otomatik)
+                    Tümü
                   </Button>
                 </div>
               </div>
