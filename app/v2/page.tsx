@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Download, Loader2, LogOut, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Upload, Download, Loader2, LogOut, Trash2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 interface Rectangle {
   id: string;
@@ -477,11 +477,22 @@ export default function EditorPage() {
     <div className="container mx-auto p-4 max-w-6xl">
       {/* Header */}
       <div className="mb-8 flex items-start justify-between">
-        <div>
-          <h1 className="text-4xl font-bold mb-2">Goruntu Editorlu OCR</h1>
-          <p className="text-muted-foreground">
-            Birden fazla goruntu yukleyin, alanlari secin ve toplu OCR yapin
-          </p>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push('/')}
+            className="flex items-center gap-1"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Geri
+          </Button>
+          <div>
+            <h1 className="text-4xl font-bold mb-2">Goruntu Editorlu OCR</h1>
+            <p className="text-muted-foreground">
+              Birden fazla goruntu yukleyin, alanlari secin ve toplu OCR yapin
+            </p>
+          </div>
         </div>
         <Button
           variant="outline"
