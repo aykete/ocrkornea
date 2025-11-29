@@ -39,6 +39,20 @@ export default function Home() {
     }
   };
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove data URL prefix (e.g., "data:image/png;base64,")
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processFiles = async () => {
     if (files.length === 0) {
       alert('Lütfen en az bir fotoğraf seçin');
@@ -49,51 +63,57 @@ export default function Home() {
     setResults([]);
 
     try {
-      const processedResults: OCRResult[] = [];
+      // Convert all files to base64 for batch processing
+      const batchImages = await Promise.all(
+        files.map(async (file, index) => ({
+          id: `${index}-${file.name}`,
+          imageBase64: await fileToBase64(file),
+          imageType: imageType,
+        }))
+      );
 
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('imageType', imageType);
+      // Send batch request
+      const response = await fetch('/api/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: batchImages }),
+      });
 
-        const response = await fetch('/api/ocr', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }));
-          throw new Error(`${file.name} için OCR başarısız: ${errorData.error || errorData.details || 'Detay yok'}`);
-        }
-
-        const data = await response.json();
-
-        // Debug: OCR sonuçlarını console'a yazdır
-        if (data.debug) {
-          console.log('OCR Debug:', data.debug);
-          console.log('Extracted Text (first 500 chars):', data.fullText.substring(0, 500));
-          console.log('Full Text Length:', data.fullText.length);
-          // AC Depth'in metinde olup olmadığını kontrol et
-          const hasACDepth = data.fullText.toLowerCase().includes('depth');
-          const hasPupilDia = data.fullText.toLowerCase().includes('pupil');
-          console.log('Contains "depth"?', hasACDepth);
-          console.log('Contains "pupil"?', hasPupilDia);
-          if (hasACDepth) {
-            // AC Depth civarındaki metni göster
-            const depthIndex = data.fullText.toLowerCase().indexOf('depth');
-            console.log('Text around "depth":', data.fullText.substring(Math.max(0, depthIndex - 50), depthIndex + 100));
-          }
-        }
-
-        // Veri parse işlemi
-        const extractedData = parseCorneaData(data.fullText, fieldNames);
-
-        processedResults.push({
-          fileName: file.name,
-          fullText: data.fullText,
-          extractedData,
-        });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Bilinmeyen hata' }));
+        throw new Error(`Batch OCR başarısız: ${errorData.error || errorData.details || 'Detay yok'}`);
       }
+
+      const data = await response.json();
+      console.log('Batch OCR completed:', data.totalProcessed, 'images processed');
+
+      // Process results
+      const processedResults: OCRResult[] = data.results.map((result: any, index: number) => {
+        const fileName = files[index].name;
+
+        if (!result.success) {
+          console.warn(`OCR failed for ${fileName}:`, result.error);
+          return {
+            fileName,
+            fullText: '',
+            extractedData: {},
+          };
+        }
+
+        // Debug log
+        if (result.debug) {
+          console.log(`OCR Debug for ${fileName}:`, result.debug);
+        }
+
+        // Parse cornea data
+        const extractedData = parseCorneaData(result.fullText, fieldNames);
+
+        return {
+          fileName,
+          fullText: result.fullText,
+          extractedData,
+        };
+      });
 
       setResults(processedResults);
     } catch (error) {

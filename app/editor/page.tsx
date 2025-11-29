@@ -261,6 +261,19 @@ export default function EditorPage() {
     });
   };
 
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const processOCR = async () => {
     if (rectangles.length === 0) {
       alert('Lutfen en az bir alan secin');
@@ -279,38 +292,47 @@ export default function EditorPage() {
     try {
       const allResults: OCRResult[] = [];
 
+      // Process each image's rectangles as a batch
       for (let i = 0; i < imageFiles.length; i++) {
         const file = imageFiles[i];
         setProgress({ current: i + 1, total: imageFiles.length });
 
+        // Crop all rectangles for this image and prepare batch
+        const batchImages = await Promise.all(
+          rectangles.map(async (rect) => {
+            const croppedBlob = await cropRegion(file, rect);
+            const base64 = await blobToBase64(croppedBlob);
+            return {
+              id: rect.id,
+              imageBase64: base64,
+              imageType: 'cropped',
+            };
+          })
+        );
+
+        // Send batch request for all rectangles of this image
+        const response = await fetch('/api/ocr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ images: batchImages }),
+        });
+
         const resultData: Record<string, string> = {};
 
-        for (const rect of rectangles) {
-          try {
-            const croppedBlob = await cropRegion(file, rect);
-            const formData = new FormData();
-            formData.append('file', croppedBlob, `${rect.label}.png`);
-            formData.append('imageType', 'cropped');
+        if (!response.ok) {
+          console.error(`Batch OCR failed for ${file.name}`);
+          rectangles.forEach(rect => { resultData[rect.label] = '-'; });
+        } else {
+          const data = await response.json();
 
-            const response = await fetch('/api/ocr', {
-              method: 'POST',
-              body: formData,
-            });
-
-            if (!response.ok) {
-              console.error(`OCR failed for ${rect.label} in ${file.name}`);
-              resultData[rect.label] = '-';
-              continue;
+          // Map results back to rectangle labels
+          data.results.forEach((result: any) => {
+            const rect = rectangles.find(r => r.id === result.id);
+            if (rect) {
+              const cleanText = (result.fullText || '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+              resultData[rect.label] = cleanText || '-';
             }
-
-            const data = await response.json();
-            // Clean up the OCR result - remove newlines and extra spaces
-            const cleanText = (data.fullText || '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-            resultData[rect.label] = cleanText || '-';
-          } catch (error) {
-            console.error(`Error processing ${rect.label}:`, error);
-            resultData[rect.label] = '-';
-          }
+          });
         }
 
         allResults.push({
