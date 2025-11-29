@@ -291,18 +291,32 @@ export default function Home() {
         searchResult: depthIndex !== -1 ? 'Depth keyword found' : 'NOT FOUND'
       });
 
-      // Pupil Dia için de esnek pattern
-      // Format: "Pupil Dia : 2.92 mm"
-      const pupilDiaMatch =
-        text.match(/Pupil\s+Dia[:\s.]+([0-9.]+)/i) ||
-        text.match(/Pupil\s*Diameter[:\s]+([0-9.]+)/i);
-
-      data['Pupil_Dia'] = pupilDiaMatch ? pupilDiaMatch[1] : '-';
+      // Pupil Dia - "Pupil" + "Dia" kombinasyonunu ara (Pupil Center değil!)
+      let pupilDiaValue = '-';
+      // "Pupil" ve hemen ardından "Dia" gelen yeri bul (newline olabilir aralarında)
+      const pupilDiaIndex = text.search(/Pupil[\s\n]+Dia/i);
+      if (pupilDiaIndex !== -1) {
+        // "Pupil Dia"dan sonraki 100 karakteri al
+        const afterPupilDia = text.substring(pupilDiaIndex, pupilDiaIndex + 100);
+        // ":" karakterinden sonraki kısmı al
+        const colonIndex = afterPupilDia.indexOf(':');
+        if (colonIndex !== -1) {
+          const afterColon = afterPupilDia.substring(colonIndex + 1);
+          // İlk ondalıklı sayıyı bul (negatif olabilir: -2.55)
+          const numberMatch = afterColon.match(/(-?[0-9]+\.[0-9]+)/);
+          if (numberMatch) {
+            pupilDiaValue = numberMatch[1];
+          }
+        }
+      }
+      data['Pupil_Dia'] = pupilDiaValue;
 
       console.log('Pupil Dia parsing:', {
-        found: !!pupilDiaMatch,
-        value: pupilDiaMatch ? pupilDiaMatch[1] : 'NOT FOUND',
-        matchedPattern: pupilDiaMatch ? pupilDiaMatch[0] : 'NONE'
+        found: pupilDiaValue !== '-',
+        value: pupilDiaValue,
+        searchResult: pupilDiaIndex !== -1 ? 'Pupil Dia found' : 'NOT FOUND',
+        // Debug: Pupil Dia'dan sonraki metin
+        afterPupilDiaText: pupilDiaIndex !== -1 ? text.substring(pupilDiaIndex, pupilDiaIndex + 80) : 'N/A'
       });
     }
 

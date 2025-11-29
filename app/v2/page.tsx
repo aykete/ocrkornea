@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Download, Loader2, LogOut, Trash2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Upload, Download, Loader2, LogOut, Trash2, Eye, EyeOff, ArrowLeft, GripVertical } from 'lucide-react';
 
 interface Rectangle {
   id: string;
@@ -45,6 +45,7 @@ export default function EditorPage() {
 
   // UI state
   const [showRectangles, setShowRectangles] = useState(true);
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -219,6 +220,43 @@ export default function EditorPage() {
 
   const handleDeleteRectangle = (id: string) => {
     setRectangles(rectangles.filter(rect => rect.id !== id));
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedId(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    if (!draggedId || draggedId === targetId) {
+      setDraggedId(null);
+      return;
+    }
+
+    const draggedIndex = rectangles.findIndex(r => r.id === draggedId);
+    const targetIndex = rectangles.findIndex(r => r.id === targetId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedId(null);
+      return;
+    }
+
+    const newRectangles = [...rectangles];
+    const [draggedItem] = newRectangles.splice(draggedIndex, 1);
+    newRectangles.splice(targetIndex, 0, draggedItem);
+
+    setRectangles(newRectangles);
+    setDraggedId(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedId(null);
   };
 
   const cropRegion = async (file: File, rect: Rectangle): Promise<Blob> => {
@@ -608,11 +646,21 @@ export default function EditorPage() {
             ) : (
               <div className="space-y-3">
                 {rectangles.map((rect, index) => (
-                  <div key={rect.id} className="flex items-center gap-2">
-                    <div
-                      className="w-4 h-4 rounded"
-                      style={{ backgroundColor: '#3b82f6' }}
-                    />
+                  <div
+                    key={rect.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, rect.id)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, rect.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex items-center gap-2 p-2 rounded border ${
+                      draggedId === rect.id
+                        ? 'opacity-50 border-dashed border-blue-500'
+                        : 'border-transparent hover:bg-muted/50'
+                    }`}
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab active:cursor-grabbing flex-shrink-0" />
+                    <span className="text-xs text-muted-foreground w-4 flex-shrink-0">{index + 1}</span>
                     <Input
                       value={rect.label}
                       onChange={(e) => handleLabelChange(rect.id, e.target.value)}
@@ -623,7 +671,7 @@ export default function EditorPage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDeleteRectangle(rect.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive flex-shrink-0"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
