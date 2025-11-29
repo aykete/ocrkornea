@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Upload, Download, Loader2, LogOut, Trash2 } from 'lucide-react';
+import { Upload, Download, Loader2, LogOut, Trash2, Eye, EyeOff } from 'lucide-react';
 
 interface Rectangle {
   id: string;
@@ -42,6 +42,9 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [results, setResults] = useState<OCRResult[]>([]);
+
+  // UI state
+  const [showRectangles, setShowRectangles] = useState(true);
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -102,8 +105,10 @@ export default function EditorPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw existing rectangles
-    rectangles.forEach((rect) => {
+    // Draw existing rectangles (only if visible)
+    if (!showRectangles) return;
+
+    rectangles.forEach((rect, index) => {
       const x = rect.x * templateSize.width;
       const y = rect.y * templateSize.height;
       const width = rect.width * templateSize.width;
@@ -118,15 +123,17 @@ export default function EditorPage() {
       ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
       ctx.fillRect(x, y, width, height);
 
-      // Label background
+      // Number label (inside rectangle, top-left corner)
+      const numberLabel = String(index + 1);
       ctx.fillStyle = '#3b82f6';
-      const labelWidth = ctx.measureText(rect.label).width + 8;
-      ctx.fillRect(x, y - 20, labelWidth, 20);
+      ctx.font = '10px sans-serif';
+      const labelWidth = ctx.measureText(numberLabel).width + 6;
+      ctx.fillRect(x, y, labelWidth, 14
+      );
 
-      // Label text
+      // Number text
       ctx.fillStyle = '#ffffff';
-      ctx.font = '12px sans-serif';
-      ctx.fillText(rect.label, x + 4, y - 6);
+      ctx.fillText(numberLabel, x + 3, y + 10);
     });
 
     // Draw current rectangle being drawn
@@ -145,7 +152,7 @@ export default function EditorPage() {
       ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
       ctx.fillRect(x, y, width, height);
     }
-  }, [rectangles, currentRect, templateSize]);
+  }, [rectangles, currentRect, templateSize, showRectangles]);
 
   useEffect(() => {
     redrawCanvas();
@@ -432,7 +439,27 @@ export default function EditorPage() {
               {/* Template Image with Canvas Overlay */}
               {templateSrc && (
                 <div className="mt-4">
-                  <Label className="mb-2 block">2. Alanlari Secin (Sablon)</Label>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>2. Alanlari Secin (Sablon)</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowRectangles(!showRectangles)}
+                      className="flex items-center gap-1"
+                    >
+                      {showRectangles ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          Gizle
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          Goster
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground mb-2">
                     Fareyi surukleyerek dikdortgen cizin. Sectiginiz alanlar tum goruntuler icin uygulanacak.
                   </p>
