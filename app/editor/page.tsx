@@ -268,17 +268,112 @@ export default function EditorPage() {
     });
   };
 
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        const base64 = result.split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
+  // Combine multiple cropped regions into a single canvas
+  const combineRegions = async (
+    file: File,
+    rects: Rectangle[]
+  ): Promise<{ base64: string; boundaries: { id: string; xStart: number; xEnd: number }[] }> => {
+    const GAP = 10; // Gap between regions
+
+    // First, crop all regions and get their dimensions
+    const croppedImages: { id: string; blob: Blob; width: number; height: number }[] = [];
+
+    for (const rect of rects) {
+      const blob = await cropRegion(file, rect);
+
+      // Get image dimensions from blob
+      const img = await new Promise<HTMLImageElement>((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.src = URL.createObjectURL(blob);
+      });
+
+      croppedImages.push({
+        id: rect.id,
+        blob,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      });
+
+      URL.revokeObjectURL(img.src);
+    }
+
+    // Calculate combined canvas size
+    const totalWidth = croppedImages.reduce((sum, img) => sum + img.width, 0) + GAP * (croppedImages.length - 1);
+    const maxHeight = Math.max(...croppedImages.map(img => img.height));
+
+    // Create combined canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = totalWidth;
+    canvas.height = maxHeight;
+    const ctx = canvas.getContext('2d')!;
+
+    // Fill with white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, totalWidth, maxHeight);
+
+    // Draw each cropped image and track boundaries
+    const boundaries: { id: string; xStart: number; xEnd: number }[] = [];
+    let currentX = 0;
+
+    for (const croppedImg of croppedImages) {
+      const img = await new Promise<HTMLImageElement>((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.src = URL.createObjectURL(croppedImg.blob);
+      });
+
+      ctx.drawImage(img, currentX, 0);
+
+      boundaries.push({
+        id: croppedImg.id,
+        xStart: currentX,
+        xEnd: currentX + croppedImg.width,
+      });
+
+      currentX += croppedImg.width + GAP;
+      URL.revokeObjectURL(img.src);
+    }
+
+    // Convert to base64
+    const base64 = canvas.toDataURL('image/png').split(',')[1];
+
+    return { base64, boundaries };
+  };
+
+  // Parse OCR results by x-coordinate to separate text for each region
+  const parseRegionResults = (
+    textBlocks: { description: string; boundingBox: { x: number; y: number }[] }[],
+    boundaries: { id: string; xStart: number; xEnd: number }[]
+  ): Record<string, string> => {
+    const results: Record<string, string[]> = {};
+
+    // Initialize results for each region
+    boundaries.forEach(b => { results[b.id] = []; });
+
+    // Assign each text block to a region based on x-coordinate
+    textBlocks.forEach(block => {
+      if (!block.boundingBox || block.boundingBox.length === 0) return;
+
+      // Get average x-coordinate of the block
+      const avgX = block.boundingBox.reduce((sum, v) => sum + (v.x || 0), 0) / block.boundingBox.length;
+
+      // Find which region this block belongs to
+      for (const boundary of boundaries) {
+        if (avgX >= boundary.xStart && avgX < boundary.xEnd) {
+          results[boundary.id].push(block.description);
+          break;
+        }
+      }
     });
+
+    // Combine text for each region
+    const finalResults: Record<string, string> = {};
+    for (const [id, texts] of Object.entries(results)) {
+      finalResults[id] = texts.join(' ').replace(/\s+/g, ' ').trim() || '-';
+    }
+
+    return finalResults;
   };
 
   const processOCR = async () => {
@@ -299,46 +394,39 @@ export default function EditorPage() {
     try {
       const allResults: OCRResult[] = [];
 
-      // Process each image's rectangles as a batch
+      // Process each image with combined regions (single API call per image)
       for (let i = 0; i < imageFiles.length; i++) {
         const file = imageFiles[i];
         setProgress({ current: i + 1, total: imageFiles.length });
 
-        // Crop all rectangles for this image and prepare batch
-        const batchImages = await Promise.all(
-          rectangles.map(async (rect) => {
-            const croppedBlob = await cropRegion(file, rect);
-            const base64 = await blobToBase64(croppedBlob);
-            return {
-              id: rect.id,
-              imageBase64: base64,
-              imageType: 'cropped',
-            };
-          })
-        );
+        // Combine all rectangles into a single image
+        const { base64, boundaries } = await combineRegions(file, rectangles);
 
-        // Send batch request for all rectangles of this image
+        // Send single request with combined image
+        const formData = new FormData();
+        const blob = await fetch(`data:image/png;base64,${base64}`).then(r => r.blob());
+        formData.append('file', blob, 'combined.png');
+        formData.append('imageType', 'cropped');
+
         const response = await fetch('/api/ocr', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ images: batchImages }),
+          body: formData,
         });
 
         const resultData: Record<string, string> = {};
 
         if (!response.ok) {
-          console.error(`Batch OCR failed for ${file.name}`);
+          console.error(`OCR failed for ${file.name}`);
           rectangles.forEach(rect => { resultData[rect.label] = '-'; });
         } else {
           const data = await response.json();
 
-          // Map results back to rectangle labels
-          data.results.forEach((result: any) => {
-            const rect = rectangles.find(r => r.id === result.id);
-            if (rect) {
-              const cleanText = (result.fullText || '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-              resultData[rect.label] = cleanText || '-';
-            }
+          // Parse results by x-coordinate to separate text for each region
+          const parsedResults = parseRegionResults(data.textBlocks || [], boundaries);
+
+          // Map results by rectangle ID (not label, so label changes don't break it)
+          rectangles.forEach(rect => {
+            resultData[rect.id] = parsedResults[rect.id] || '-';
           });
         }
 
@@ -364,13 +452,12 @@ export default function EditorPage() {
       return;
     }
 
-    // Get labels from rectangles to maintain order
-    const labels = rectangles.map(r => r.label);
-    const headers = ['Dosya Adi', ...labels];
+    // Headers use labels, but data lookup uses IDs
+    const headers = ['Dosya Adi', ...rectangles.map(r => r.label)];
 
     const rows = results.map(result => {
-      const values = labels.map(label => {
-        const value = result.data[label] || '-';
+      const values = rectangles.map(rect => {
+        const value = result.data[rect.id] || '-';
         // Escape quotes and handle special characters
         return `"${value.replace(/"/g, '""')}"`;
       });
@@ -599,7 +686,7 @@ export default function EditorPage() {
                       </TableCell>
                       {rectangles.map((rect) => (
                         <TableCell key={rect.id} className="font-mono text-sm">
-                          {result.data[rect.label] || '-'}
+                          {result.data[rect.id] || '-'}
                         </TableCell>
                       ))}
                     </TableRow>
